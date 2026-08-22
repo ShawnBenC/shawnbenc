@@ -1,0 +1,77 @@
+{
+  "id": "ShawnBenC.app.sub",
+  "name": "乌蝇哥™BoxJs",
+  "author": "@乌蝇哥™",
+  "icon": "https://avatars.githubusercontent.com/u/101103821?v=4",
+  "repo": "https://github.com/ShawnBenC/shawnbenc/",
+  "apps": [
+    {
+      "id": "DeliCheckin",
+      "name": "得力e+ 自动打卡",
+      "keys": [
+        "Deli.Account",
+        "Deli.Lng",
+        "Deli.Lat",
+        "Deli.Address",
+        "Deli.Name",
+        "Deli.DeviceId"
+      ],
+      "settings": [
+        {
+          "id": "Deli.Account",
+          "name": "账号凭证 (Token等)",
+          "val": "",
+          "type": "textarea",
+          "placeholder": "请打开 得力e+ 考勤页自动获取",
+          "desc": "⚠️ 由 QX 脚本自动抓取并填充，无需手动修改"
+        },
+        {
+          "id": "Deli.Lng",
+          "name": "打卡经度 (lng)",
+          "val": "",
+          "type": "text",
+          "placeholder": "例如: 116.598407",
+          "desc": "与抓包数据中的 lng 保持一致"
+        },
+        {
+          "id": "Deli.Lat",
+          "name": "打卡纬度 (lat)",
+          "val": "",
+          "type": "text",
+          "placeholder": "例如: 39.293678",
+          "desc": "与抓包数据中的 lat 保持一致"
+        },
+        {
+          "id": "Deli.Address",
+          "name": "公司打卡地址",
+          "val": "某某有限公司",
+          "type": "text",
+          "placeholder": "例如: xx省xx市xx区xx路xx号",
+          "desc": "与抓包数据中的 address 保持一致"
+        },
+        {
+          "id": "Deli.Name",
+          "name": "打卡位置名称",
+          "val": "某某有限公司",
+          "type": "text",
+          "placeholder": "例如: xxx公司",
+          "desc": "与抓包数据中的 name 保持一致"
+        },
+        {
+          "id": "Deli.DeviceId",
+          "name": "设备标识码",
+          "val": "800026",
+          "type": "text",
+          "placeholder": "默认 800026",
+          "desc": "与抓包数据中的 device_id 保持一致"
+        }
+      ],
+      "author": "@乌蝇哥™",
+      "repo": "https://github.com/ShawnBenC/shawnbenc/",
+      "icons": [
+        "https://raw.githubusercontent.com/ShawnBenC/shawnbenc/main/Icons/deli.png",
+        "https://raw.githubusercontent.com/ShawnBenC/shawnbenc/main/Icons/deli.png"
+      ]
+    }
+  ]
+}

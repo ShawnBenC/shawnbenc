@@ -19,8 +19,7 @@
 ```
 shawnbenc
 ├── QuantumultX/        # QX JS 脚本
-├── boxjs.json
-└── 待续...
+└── boxjs.json
 ```
 
 ### BoxJS 订阅

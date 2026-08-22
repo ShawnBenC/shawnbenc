@@ -23,7 +23,7 @@
           "val": "",
           "type": "textarea",
           "placeholder": "请打开 得力e+ 考勤页自动获取",
-          "desc": "⚠️ 由 QX 脚本自动抓取并填充，无需手动修改"
+          "desc": "⚠️ 进入考勤页面自动抓取"
         },
         {
           "id": "Deli.Lng",
@@ -31,7 +31,7 @@
           "val": "",
           "type": "text",
           "placeholder": "例如: 116.598407",
-          "desc": "与抓包数据中的 lng 保持一致"
+          "desc": "⚠️ 请在 App 内真实点击一次打卡，系统会自动抓取填入"
         },
         {
           "id": "Deli.Lat",
@@ -39,7 +39,7 @@
           "val": "",
           "type": "text",
           "placeholder": "例如: 39.293678",
-          "desc": "与抓包数据中的 lat 保持一致"
+          "desc": "⚠️ 请在 App 内真实点击一次打卡，系统会自动抓取填入"
         },
         {
           "id": "Deli.Address",
@@ -47,7 +47,7 @@
           "val": "某某有限公司",
           "type": "text",
           "placeholder": "例如: xx省xx市xx区xx路xx号",
-          "desc": "与抓包数据中的 address 保持一致"
+          "desc": "⚠️ 请在 App 内真实点击一次打卡，系统会自动抓取填入"
         },
         {
           "id": "Deli.Name",
@@ -55,7 +55,7 @@
           "val": "某某有限公司",
           "type": "text",
           "placeholder": "例如: xxx公司",
-          "desc": "与抓包数据中的 name 保持一致"
+          "desc": "⚠️ 请在 App 内真实点击一次打卡，系统会自动抓取填入"
         },
         {
           "id": "Deli.DeviceId",
@@ -63,7 +63,7 @@
           "val": "800026",
           "type": "text",
           "placeholder": "默认 800026",
-          "desc": "与抓包数据中的 device_id 保持一致"
+          "desc": "⚠️ 请在 App 内真实点击一次打卡，系统会自动抓取填入"
         }
       ],
       "author": "@乌蝇哥™",

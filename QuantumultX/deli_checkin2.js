@@ -7,11 +7,14 @@
 /*
 [rewrite_local]
 # 添加重写抓取打卡身份参数及定位信息 (必须使用 body 模式)
-^https?:\/\/kq\.delicloud\.com\/attend\/.* url script-request-body https://raw.githubusercontent.com/ShawnBenC/shawnbenc/refs/heads/main/QuantumultX/deli_checkin.js
+^https?:\/\/kq\.delicloud\.com\/attend\/.* url script-request-body https://raw.githubusercontent.com/ShawnBenC/shawnbenc/refs/heads/main/QuantumultX/deli_checkin2.js
 
 [task_local]
-# 每天 8:50 和 18:10 自动执行一次打卡 (请根据你的上下班时间修改)
-50 8,18 * * * https://raw.githubusercontent.com/ShawnBenC/shawnbenc/refs/heads/main/QuantumultX/deli_checkin.js, tag=得力自动打卡, enabled=true
+# 早上、中午、下午 (8点, 11点, 13点的 45-55分 每分钟轮询)
+45-55 8,11,13 * * * https://raw.githubusercontent.com/ShawnBenC/shawnbenc/refs/heads/main/QuantumultX/deli_checkin2.js, tag=得力打卡(早中下), enabled=true
+
+# 下班时间段 (17点的 31-55分 每分钟轮询)
+31-55 17 * * * https://raw.githubusercontent.com/ShawnBenC/shawnbenc/refs/heads/main/QuantumultX/deli_checkin2.js, tag=得力打卡(晚退), enabled=true
 
 [MITM]
 hostname = kq.delicloud.com
@@ -106,11 +109,7 @@ function doCheckin() {
     }
 
     let acc = {};
-    try {
-        acc = JSON.parse(accountStr);
-    } catch (e) {
-        return $.done();
-    }
+    try { acc = JSON.parse(accountStr); } catch (e) { return $.done(); }
 
     // 从 BoxJS 读取定位参数
     const lng = $.getdata("Deli.Lng");
@@ -123,6 +122,45 @@ function doCheckin() {
         $.msg($.name, "❌ 缺少定位或设备数据", "请在 App 内手动执行一次打卡，脚本将自动抓取并保存。");
         return $.done();
     }
+    
+    // ==========================================
+    // 🛡️ 核心防风控逻辑：时间段轮询与随机触发
+    // ==========================================
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}${now.getMonth()+1}${now.getDate()}`;    // 如: 2026822
+    const hour = now.getHours();
+    const minute = now.getMinutes();
+
+    // 生成当前时段的唯一缓存标记，例如: Deli_Checkin_2026822_8
+    const flagKey = `Deli_Checkin_${dateStr}_${hour}`;
+    const hasCheckedIn = $.getdata(flagKey);
+
+    // 如果 QX 的定时任务是手动点击执行的，我们强行绕过随机逻辑直接打卡
+    // 注意：$request 在 task 模式下是 undefined，我们用判断通知机制来识别
+    
+    if (hasCheckedIn === "true") {
+        console.log(`[得力打卡防风控] 检测到当前时段 (${hour}点) 已经成功打卡，静默跳过。`);
+        return $.done();
+    }
+
+    // 设定 20% 的随机触发概率
+    let shouldRun = Math.random() < 0.2;
+    console.log(`[得力打卡防风控] 当前时间 ${hour}:${minute}，随机触发结果: ${shouldRun}`);
+
+    // 保底机制：如果一直没抽中，到了时间段末尾强制执行
+    if (hour === 8 && minute >= 54) shouldRun = true;
+    if (hour === 11 && minute >= 54) shouldRun = true;
+    if (hour === 13 && minute >= 54) shouldRun = true;
+    if (hour === 17 && minute >= 50) shouldRun = true;
+
+    if (!shouldRun) {
+        console.log(`[得力打卡防风控] 未命中触发概率，将在下一分钟继续轮询...`);
+        return $.done(); // 静默结束，等待下一分钟
+    }
+
+    // ==========================================
+    // 🛡️ 触发成功，开始发送真实请求
+    // ==========================================
 
     const url = "https://kq.delicloud.com/attend/check/check";
     const headers = {

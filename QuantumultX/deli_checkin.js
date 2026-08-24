@@ -31,71 +31,77 @@ if (typeof $request !== "undefined") {
 }
 
 function captureData() {
-    const url = $request.url;
-    const headers = $request.headers;
-    const body = $request.body; // 获取请求体用于提取坐标
+    try {
+        const url = $request.url;
+        const headers = $request.headers;
+        const body = $request.body; // 获取请求体用于提取坐标
 
-    if (!headers) return $.done();
+        if (!headers) return;
 
-    // 兼容键值大小写
-    const getHeader = (key) => headers[key] || headers[key.toLowerCase()] || headers[key.toUpperCase()];
-    const token = getHeader("token");
-    const cookie = getHeader("Cookie");
-    const uuid = getHeader("uuid");
+        // 兼容键值大小写
+        const getHeader = (key) => headers[key] || headers[key.toLowerCase()] || headers[key.toUpperCase()];
+        const token = getHeader("token");
+        const cookie = getHeader("Cookie");
+        const uuid = getHeader("uuid");
 
-    // 1. 抓取账号凭证 (Token等)
-    if (url.indexOf("kq.delicloud.com") > -1 && token && cookie && uuid) {
-        const account = {
-            token: token, cookie: cookie, uuid: uuid,
-            v1_member_id: getHeader("v1_member_id"),
-            user_id: getHeader("user_id"),
-            org_id: getHeader("org_id")
-        };
-        
-        // 尝试读取旧数据，防止重复弹窗打扰
-        let isChanged = true;
-        const oldAccountStr = $.getdata(KEY_ACCOUNT);
-        if (oldAccountStr) {
-            try {
-                if (JSON.parse(oldAccountStr).token === token) isChanged = false;
-            } catch (e) {}
-        }
-
-        if (isChanged) {
-            $.setdata(JSON.stringify(account), KEY_ACCOUNT);
-            $.msg($.name, "✅ 账号凭证抓取成功", "最新 Token 及 Cookie 已保存至 BoxJS。");
-        }
-    }
-
-    // 2. 抓取真实打卡定位与设备参数 (核心优化)
-    if (url.indexOf("/attend/check/check") > -1 && body) {
-        try {
-            const reqBody = JSON.parse(body);
-            if (reqBody.lng && reqBody.lat) {
-                // 读取旧坐标对比，避免重复弹窗
-                let isLocChanged = false;
-                if ($.getdata("Deli.Lng") !== String(reqBody.lng)) {
-                    $.setdata(String(reqBody.lng), "Deli.Lng");
-                    isLocChanged = true;
-                }
-                if ($.getdata("Deli.Lat") !== String(reqBody.lat)) {
-                    $.setdata(String(reqBody.lat), "Deli.Lat");
-                    isLocChanged = true;
-                }
-                // 同步更新其他静态信息
-                if (reqBody.address) $.setdata(reqBody.address, "Deli.Address");
-                if (reqBody.name) $.setdata(reqBody.name, "Deli.Name");
-                if (reqBody.device_id) $.setdata(String(reqBody.device_id), "Deli.DeviceId");
-
-                if (isLocChanged) {
-                    $.msg($.name, "📍 定位及设备信息抓取成功", "已自动更新精准经纬度及设备码，以后可全自动打卡。");
-                }
+        // 1. 抓取账号凭证 (Token等)
+        if (url.indexOf("kq.delicloud.com") > -1 && token && cookie && uuid) {
+            const account = {
+                token: token, cookie: cookie, uuid: uuid,
+                v1_member_id: getHeader("v1_member_id"),
+                user_id: getHeader("user_id"),
+                org_id: getHeader("org_id")
+            };
+            
+            // 尝试读取旧数据，防止重复弹窗打扰
+            let isChanged = true;
+            const oldAccountStr = $.getdata(KEY_ACCOUNT);
+            if (oldAccountStr) {
+                try {
+                    if (JSON.parse(oldAccountStr).token === token) isChanged = false;
+                } catch (e) {}
             }
-        } catch (e) {
-            console.log("[得力打卡] 解析打卡请求体失败");
+
+            if (isChanged) {
+                $.setdata(JSON.stringify(account), KEY_ACCOUNT);
+                $.msg($.name, "✅ 账号凭证抓取成功", "最新 Token 及 Cookie 已保存至 BoxJS。");
+            }
         }
+
+        // 2. 抓取真实打卡定位与设备参数 (核心优化)
+        if (url.indexOf("/attend/check/check") > -1 && body) {
+            try {
+                const reqBody = JSON.parse(body);
+                if (reqBody.lng && reqBody.lat) {
+                    // 读取旧坐标对比，避免重复弹窗
+                    let isLocChanged = false;
+                    if ($.getdata("Deli.Lng") !== String(reqBody.lng)) {
+                        $.setdata(String(reqBody.lng), "Deli.Lng");
+                        isLocChanged = true;
+                    }
+                    if ($.getdata("Deli.Lat") !== String(reqBody.lat)) {
+                        $.setdata(String(reqBody.lat), "Deli.Lat");
+                        isLocChanged = true;
+                    }
+                    // 同步更新其他静态信息
+                    if (reqBody.address) $.setdata(reqBody.address, "Deli.Address");
+                    if (reqBody.name) $.setdata(reqBody.name, "Deli.Name");
+                    if (reqBody.device_id) $.setdata(String(reqBody.device_id), "Deli.DeviceId");
+
+                    if (isLocChanged) {
+                        $.msg($.name, "📍 定位参数抓取成功", "已同步更新经纬度及设备信息。");
+                    }
+                }
+            } catch (e) {
+                console.log("[得力打卡] 解析打卡请求体失败");
+            }
+        }
+    } catch (e) {
+        console.log(`[得力打卡] 抓包处理异常: ${e}`);
+    } finally {
+        // 保障逻辑：无论抓包成功与否，必须正常放行原请求，确保 App 打卡界面能正常打开
+        $.done({});
     }
-    $.done();
 }
 
 function doCheckin() {
@@ -135,53 +141,53 @@ function doCheckin() {
         const executeTime = new Date();
         console.log(`[得力打卡] 🚀 延迟完毕 (${executeTime.toLocaleTimeString()})，发送请求... 坐标: ${lng}, ${lat}`);
 
-    console.log(`[得力打卡] 🚀 触发打卡请求... 坐标: ${lng}, ${lat}`);
-    const url = "https://kq.delicloud.com/attend/check/check";
-    const headers = {
-        "Host": "kq.delicloud.com",
-        "uuid": acc.uuid, "v1_member_id": acc.v1_member_id,
-        "client_type": "eplus_app", "user_id": acc.user_id,
-        "Accept": "*/*", "Accept-Language": "zh-Hans-CN;q=1, en-CN;q=0.9",
-        "token": acc.token, "Content-Type": "application/json",
-        "User-Agent": "smartoffice/3.3.0 (iPhone; iOS 18.7; Scale/3.00)",
-        "Connection": "keep-alive", "org_id": acc.org_id, "Cookie": acc.cookie
-    };
+        const url = "https://kq.delicloud.com/attend/check/check";
+        const headers = {
+            "Host": "kq.delicloud.com",
+            "uuid": acc.uuid, "v1_member_id": acc.v1_member_id,
+            "client_type": "eplus_app", "user_id": acc.user_id,
+            "Accept": "*/*", "Accept-Language": "zh-Hans-CN;q=1, en-CN;q=0.9",
+            "token": acc.token, "Content-Type": "application/json",
+            "User-Agent": "smartoffice/3.3.0 (iPhone; iOS 18.7; Scale/3.00)",
+            "Connection": "keep-alive", "org_id": acc.org_id, "Cookie": acc.cookie
+        };
 
-    const body = {
-        "address": address, "name": name, "device_id": deviceId,
-        "lng": parseFloat(lng), "device_type": "0",
-        "lat": parseFloat(lat), "type": "amap"
-    };
+        const body = {
+            "address": address, "name": name, "device_id": deviceId,
+            "lng": parseFloat(lng), "device_type": "0",
+            "lat": parseFloat(lat), "type": "amap"
+        };
 
-    const request = { url: url, headers: headers, body: JSON.stringify(body) };
+        const request = { url: url, headers: headers, body: JSON.stringify(body) };
 
-    $.post(request, (error, response, data) => {
-        if (error) {
-            console.log(`[得力打卡] ❌ 网络请求失败: ${error}`);
-            $.msg($.name, "❌ 打卡失败", `网络请求错误: ${error}`);
-        } else {
-            try {
-                const res = JSON.parse(data);
-                if (res.errno === 0 || res.errmsg === "ok") {
-                    // 立即锁死本班次
-                    $.setdata("true", flagKey);
-                    console.log(`[得力打卡] 🎉 打卡成功！响应: ${data}`);
-                    console.log(`[得力打卡] 🔒 已锁死防重标记: ${flagKey} = true`);
+        $.post(request, (error, response, data) => {
+            if (error) {
+                console.log(`[得力打卡] ❌ 网络请求失败: ${error}`);
+                $.msg($.name, "❌ 打卡失败", `网络请求错误: ${error}`);
+            } else {
+                try {
+                    const res = JSON.parse(data);
+                    if (res.errno === 0 || res.errmsg === "ok") {
+                        // 立即锁死本班次
+                        $.setdata("true", flagKey);
+                        console.log(`[得力打卡] 🎉 打卡成功！响应: ${data}`);
+                        console.log(`[得力打卡] 🔒 已锁死防重标记: ${flagKey} = true`);
 
-                    const timeStr = `${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-                    $.msg($.name, "🎉 打卡成功", `打卡时间: ${timeStr}\n打卡地点: ${address}`);
-                } else {
-                    const errMsg = res.errmsg || "未知错误";
-                    console.log(`[得力打卡] ⚠️ 服务端提示: ${errMsg} (errno: ${res.errno})`);
-                    $.msg($.name, "⚠️ 打卡未成功", `服务端提示: ${errMsg}`);
+                        const timeStr = `${executeTime.getHours()}:${String(executeTime.getMinutes()).padStart(2, '0')}:${String(executeTime.getSeconds()).padStart(2, '0')}`;
+                        $.msg($.name, "🎉 打卡成功", `打卡时间: ${timeStr}\n打卡地点: ${address}`);
+                    } else {
+                        const errMsg = res.errmsg || "未知错误";
+                        console.log(`[得力打卡] ⚠️ 服务端提示: ${errMsg} (errno: ${res.errno})`);
+                        $.msg($.name, "⚠️ 打卡未成功", `服务端提示: ${errMsg}`);
+                    }
+                } catch (e) {
+                    console.log(`[得力打卡] ❌ 响应解析失败: ${data}`);
+                    $.msg($.name, "❌ 响应解析失败", `原始返回: ${data}`);
                 }
-            } catch (e) {
-                console.log(`[得力打卡] ❌ 响应解析失败: ${data}`);
-                $.msg($.name, "❌ 响应解析失败", `原始返回: ${data}`);
             }
-        }
-        $.done();
-    });
+            $.done();
+        });
+    }, randomDelaySec * 1000); // 补全漏掉的 setTimeout 闭合及延迟参数
 }
 
 // -----------------------------------------------------

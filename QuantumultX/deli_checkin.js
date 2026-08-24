@@ -1,7 +1,7 @@
 // ==UserScript==
-// @ScriptName        得力e+ 自动打卡 2.0（全自动化）
+// @ScriptName        得力e+ 自动打卡 2.1（秒级全自动化）
 // @Author            乌蝇哥™
-// @UpdateTime        2026-08-22
+// @UpdateTime        2026-08-24
 // ==/UserScript==
 
 /*
@@ -124,6 +124,18 @@ function doCheckin() {
         return $.done();
     }
 
+    // ==========================================
+    // 🛡️ 触发成功，开始发送真实请求
+    // ==========================================
+    
+    const randomDelaySec = Math.floor(Math.random() * 30) + 5; //🎲 核心优化：增加 5~35 秒随机延迟
+    console.log(`[得力打卡] 🎯 命中打卡！随机延迟 ${randomDelaySec} 秒后发送真实请求...`);
+
+    setTimeout(() => {
+        const executeTime = new Date();
+        console.log(`[得力打卡] 🚀 延迟完毕 (${executeTime.toLocaleTimeString()})，发送请求... 坐标: ${lng}, ${lat}`);
+
+    console.log(`[得力打卡] 🚀 触发打卡请求... 坐标: ${lng}, ${lat}`);
     const url = "https://kq.delicloud.com/attend/check/check";
     const headers = {
         "Host": "kq.delicloud.com",
@@ -144,18 +156,28 @@ function doCheckin() {
     const request = { url: url, headers: headers, body: JSON.stringify(body) };
 
     $.post(request, (error, response, data) => {
-        if (!error) {
+        if (error) {
+            console.log(`[得力打卡] ❌ 网络请求失败: ${error}`);
+            $.msg($.name, "❌ 打卡失败", `网络请求错误: ${error}`);
+        } else {
             try {
                 const res = JSON.parse(data);
                 if (res.errno === 0 || res.errmsg === "ok") {
-                    $.msg($.name, "🎉 打卡成功", `时间: ${new Date().toLocaleTimeString()}\n位置: ${address}`);
-                } else if (data.indexOf("范围") > -1 || data.indexOf("距离") > -1) {
-                    $.msg($.name, "⚠️ 打卡异常: 不在范围", res.errmsg || data);
+                    // 立即锁死本班次
+                    $.setdata("true", flagKey);
+                    console.log(`[得力打卡] 🎉 打卡成功！响应: ${data}`);
+                    console.log(`[得力打卡] 🔒 已锁死防重标记: ${flagKey} = true`);
+
+                    const timeStr = `${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+                    $.msg($.name, "🎉 打卡成功", `打卡时间: ${timeStr}\n打卡地点: ${address}`);
                 } else {
-                    $.msg($.name, "🔔 打卡提示", res.errmsg || data);
+                    const errMsg = res.errmsg || "未知错误";
+                    console.log(`[得力打卡] ⚠️ 服务端提示: ${errMsg} (errno: ${res.errno})`);
+                    $.msg($.name, "⚠️ 打卡未成功", `服务端提示: ${errMsg}`);
                 }
             } catch (e) {
-                $.msg($.name, "🔔 原始响应", data.substring(0, 150));
+                console.log(`[得力打卡] ❌ 响应解析失败: ${data}`);
+                $.msg($.name, "❌ 响应解析失败", `原始返回: ${data}`);
             }
         }
         $.done();

@@ -1,7 +1,7 @@
 // ==UserScript==
-// @ScriptName        得力e+ 自动打卡 2.0（全自动化）
+// @ScriptName        得力e+ 自动打卡 2.2（秒级轮询全自动化）
 // @Author            乌蝇哥™
-// @UpdateTime        2026-08-22
+// @UpdateTime        2026-08-24
 // ==/UserScript==
 
 /*
@@ -10,11 +10,14 @@
 ^https?:\/\/kq\.delicloud\.com\/attend\/.* url script-request-body https://raw.githubusercontent.com/ShawnBenC/shawnbenc/refs/heads/main/QuantumultX/deli_checkin2.js
 
 [task_local]
-# 早上、中午、下午 (8点, 11点, 13点的 45-55分 每分钟轮询)
-45-55 8,11,13 * * * https://raw.githubusercontent.com/ShawnBenC/shawnbenc/refs/heads/main/QuantumultX/deli_checkin2.js, tag=得力打卡(早中下), enabled=true
+# 早上、下午 (8点,13点的 45-55分 每分钟轮询)
+45-55 8,13 * * 1-5 https://raw.githubusercontent.com/ShawnBenC/shawnbenc/refs/heads/main/QuantumultX/deli_checkin2.js, tag=得力打卡(早/下), enabled=true
 
-# 下班时间段 (17点的 31-55分 每分钟轮询)
-31-55 17 * * * https://raw.githubusercontent.com/ShawnBenC/shawnbenc/refs/heads/main/QuantumultX/deli_checkin2.js, tag=得力打卡(晚退), enabled=true
+# 下班时间段 (12点的 01-11分 每分钟轮询)
+01-11 12 * * 1-5 https://raw.githubusercontent.com/ShawnBenC/shawnbenc/refs/heads/main/QuantumultX/deli_checkin2.js, tag=得力打卡(中午), enabled=true
+
+# 下班时间段 (17点的 31-41分 每分钟轮询)
+31-41 17 * * 1-5 https://raw.githubusercontent.com/ShawnBenC/shawnbenc/refs/heads/main/QuantumultX/deli_checkin2.js, tag=得力打卡(晚退), enabled=true
 
 [MITM]
 hostname = kq.delicloud.com
@@ -91,7 +94,7 @@ function captureData() {
                 if (reqBody.device_id) $.setdata(String(reqBody.device_id), "Deli.DeviceId");
 
                 if (isLocChanged) {
-                    $.msg($.name, "📍 定位及设备信息抓取成功", "已自动更新精准经纬度及设备码，以后可全自动打卡。");
+                    $.msg($.name, "📍 定位参数抓取成功", "已同步更新经纬度及设备信息。");
                 }
             }
         } catch (e) {
@@ -127,41 +130,59 @@ function doCheckin() {
     // 🛡️ 核心防风控逻辑：时间段轮询与随机触发
     // ==========================================
     const now = new Date();
-    const dateStr = `${now.getFullYear()}${now.getMonth()+1}${now.getDate()}`;    // 如: 2026822
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
     const hour = now.getHours();
     const minute = now.getMinutes();
 
-    // 生成当前时段的唯一缓存标记，例如: Deli_Checkin_2026822_8
-    const flagKey = `Deli_Checkin_${dateStr}_${hour}`;
+    // 班次时段划定
+    let shiftTag = "unknown";
+    if (hour >= 7 && hour <= 9) shiftTag = "morning";
+    else if (hour >= 11 && hour <= 12) shiftTag = "noon";
+    else if (hour >= 13 && hour <= 15) shiftTag = "afternoon";
+    else if (hour >= 17 && hour <= 19) shiftTag = "evening";
+    else shiftTag = `hour_${hour}`;
+
+    const flagKey = `Deli_Checkin_${dateStr}_${shiftTag}`;
     const hasCheckedIn = $.getdata(flagKey);
 
-    // 如果 QX 的定时任务是手动点击执行的，我们强行绕过随机逻辑直接打卡
-    // 注意：$request 在 task 模式下是 undefined，我们用判断通知机制来识别
-    
+    console.log(`[得力打卡] 🕒 当前时间: ${hour}:${minute >= 10 ? minute : '0' + minute} | 班次标记: ${flagKey}`);
+
+    // 重复打卡拦截
     if (hasCheckedIn === "true") {
-        console.log(`[得力打卡防风控] 检测到当前时段 (${hour}点) 已经成功打卡，静默跳过。`);
+        console.log(`[得力打卡] 🛡️ 【拦截】班次 [${shiftTag}] 今日已打卡成功，无需重复触发。`);
         return $.done();
     }
 
     // 设定 20% 的随机触发概率
     let shouldRun = Math.random() < 0.2;
-    console.log(`[得力打卡防风控] 当前时间 ${hour}:${minute}，随机触发结果: ${shouldRun}`);
+    console.log(`[得力打卡] 当前时间 ${hour}:${minute}，随机触发结果: ${shouldRun}`);
 
     // 保底机制：如果一直没抽中，到了时间段末尾强制执行
     if (hour === 8 && minute >= 54) shouldRun = true;
-    if (hour === 11 && minute >= 54) shouldRun = true;
+    if (hour === 12 && minute >= 11) shouldRun = true;
     if (hour === 13 && minute >= 54) shouldRun = true;
-    if (hour === 17 && minute >= 50) shouldRun = true;
+    if (hour === 17 && minute >= 41) shouldRun = true;
 
     if (!shouldRun) {
-        console.log(`[得力打卡防风控] 未命中触发概率，将在下一分钟继续轮询...`);
+        console.log(`[得力打卡] 🎲 随机未命中，等待下一分钟轮询...`);
         return $.done(); // 静默结束，等待下一分钟
     }
 
     // ==========================================
     // 🛡️ 触发成功，开始发送真实请求
     // ==========================================
+    
+    const randomDelaySec = Math.floor(Math.random() * 30) + 5; //🎲 核心优化：增加 5~35 秒随机延迟
+    console.log(`[得力打卡] 🎯 命中打卡！随机延迟 ${randomDelaySec} 秒后发送真实请求...`);
 
+    setTimeout(() => {
+        const executeTime = new Date();
+        console.log(`[得力打卡] 🚀 延迟完毕 (${executeTime.toLocaleTimeString()})，发送请求... 坐标: ${lng}, ${lat}`);
+
+    console.log(`[得力打卡] 🚀 触发打卡请求... 坐标: ${lng}, ${lat}`);
     const url = "https://kq.delicloud.com/attend/check/check";
     const headers = {
         "Host": "kq.delicloud.com",
@@ -182,18 +203,28 @@ function doCheckin() {
     const request = { url: url, headers: headers, body: JSON.stringify(body) };
 
     $.post(request, (error, response, data) => {
-        if (!error) {
+        if (error) {
+            console.log(`[得力打卡] ❌ 网络请求失败: ${error}`);
+            $.msg($.name, "❌ 打卡失败", `网络请求错误: ${error}`);
+        } else {
             try {
                 const res = JSON.parse(data);
                 if (res.errno === 0 || res.errmsg === "ok") {
-                    $.msg($.name, "🎉 打卡成功", `时间: ${new Date().toLocaleTimeString()}\n位置: ${address}`);
-                } else if (data.indexOf("范围") > -1 || data.indexOf("距离") > -1) {
-                    $.msg($.name, "⚠️ 打卡异常: 不在范围", res.errmsg || data);
+                    // 立即锁死本班次
+                    $.setdata("true", flagKey);
+                    console.log(`[得力打卡] 🎉 打卡成功！响应: ${data}`);
+                    console.log(`[得力打卡] 🔒 已锁死防重标记: ${flagKey} = true`);
+
+                    const timeStr = `${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+                    $.msg($.name, "🎉 打卡成功", `打卡时间: ${timeStr}\n打卡地点: ${address}`);
                 } else {
-                    $.msg($.name, "🔔 打卡提示", res.errmsg || data);
+                    const errMsg = res.errmsg || "未知错误";
+                    console.log(`[得力打卡] ⚠️ 服务端提示: ${errMsg} (errno: ${res.errno})`);
+                    $.msg($.name, "⚠️ 打卡未成功", `服务端提示: ${errMsg}`);
                 }
             } catch (e) {
-                $.msg($.name, "🔔 原始响应", data.substring(0, 150));
+                console.log(`[得力打卡] ❌ 响应解析失败: ${data}`);
+                $.msg($.name, "❌ 响应解析失败", `原始返回: ${data}`);
             }
         }
         $.done();

@@ -28,6 +28,8 @@ const $ = new Env("得力e+打卡");
 // 对应 BoxJS 里的 Keys
 const KEY_ACCOUNT = "Deli.Account";
 
+console.log(`\n================== 得力打卡任务 ==================`);
+
 if (typeof $request !== "undefined") {
     // ======== 抓包重写逻辑 (触发条件：打开App进入考勤页) ========
     captureData();
@@ -95,7 +97,7 @@ function captureData() {
                     if (reqBody.device_id) $.setdata(String(reqBody.device_id), "Deli.DeviceId");
 
                     if (isLocChanged) {
-                        $.msg($.name, "📍 定位参数抓取成功", "已同步更新经纬度及设备信息。");
+                        $.msg($.name, "📍 定位参数抓取成功", "已同步更新至 BoxJS。");
                     }
                 }
             } catch (e) {
@@ -113,7 +115,7 @@ function captureData() {
 function doCheckin() {
     const accountStr = $.getdata(KEY_ACCOUNT);
     if (!accountStr) {
-        $.msg($.name, "❌ 未找到账号凭证", "请先开启重写并进入得力e+考勤页面。");
+        $.msg($.name, "❌ 未找到账号凭证", "请先运行重写并进入得力e+考勤页面获取。");
         return $.done();
     }
 
@@ -162,8 +164,8 @@ function doCheckin() {
         return $.done();
     }
 
-    // 设定 20% 的随机触发概率
-    let shouldRun = Math.random() < 0.2;
+    // 设定 10% 的随机触发概率
+    let shouldRun = Math.random() < 0.1;
     console.log(`[得力打卡] 当前时间 ${hour}:${minute}，随机触发结果: ${shouldRun}`);
 
     // 保底机制：如果一直没抽中，到了时间段末尾强制执行
@@ -173,7 +175,7 @@ function doCheckin() {
     if (hour === 17 && minute >= 41) shouldRun = true;
 
     if (!shouldRun) {
-        console.log(`[得力打卡] 🎲 随机未命中，等待下一分钟轮询...`);
+        console.log(`[得力打卡] 🎲 随机未命中，等待下一轮询...`);
         return $.done(); // 静默结束，等待下一分钟
     }
 
@@ -232,9 +234,10 @@ function doCheckin() {
                     $.msg($.name, "❌ 响应解析失败", `原始返回: ${data}`);
                 }
             }
+            console.log(`===================== END =====================\n`);
             $.done();
         });
-    }, randomDelaySec * 1000); // 补全漏掉的 setTimeout 闭合及延迟参数
+    }, randomDelaySec * 1000); 
 }
 
 // -----------------------------------------------------

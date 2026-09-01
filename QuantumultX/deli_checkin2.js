@@ -1,7 +1,7 @@
 // ==UserScript==
 // @ScriptName        得力e+ 自动打卡 2.3（秒级轮询全自动化）
 // @Author            乌蝇哥™
-// @UpdateTime        2026-08-24
+// @UpdateTime        2026-09-01
 // ==/UserScript==
 
 /*
@@ -28,13 +28,12 @@ const $ = new Env("得力e+打卡");
 // 对应 BoxJS 里的 Keys
 const KEY_ACCOUNT = "Deli.Account";
 
-console.log(`\n================== 得力打卡任务 ==================`);
-
 if (typeof $request !== "undefined") {
     // ======== 抓包重写逻辑 (触发条件：打开App进入考勤页) ========
     captureData();
 } else {
     // ======== 定时任务逻辑 (触发条件：Cron定时器或手动运行) ========
+    console.log("================== 得力打卡任务 ==================");
     doCheckin();
 }
 
@@ -234,10 +233,15 @@ function doCheckin() {
                     $.msg($.name, "❌ 响应解析失败", `原始返回: ${data}`);
                 }
             }
-            console.log(`===================== END =====================\n`);
-            $.done();
+            // 异步请求结束时打印一次结尾并退出
+            finishTask();
         });
     }, randomDelaySec * 1000); 
+}
+// 统一处理：END.log
+function finishTask() {
+    console.log("===================== END =====================\n");
+    $.done();
 }
 
 // -----------------------------------------------------

@@ -1,7 +1,7 @@
 // ==UserScript==
-// @ScriptName        得力e+ 自动打卡 2.3（秒级轮询全自动化）
+// @ScriptName        得力e+ 自动打卡 2.4（全自动化）
 // @Author            乌蝇哥™
-// @UpdateTime        2026-09-01
+// @UpdateTime        2026-09-03
 // ==/UserScript==
 
 /*
@@ -160,22 +160,32 @@ function doCheckin() {
     // 重复打卡拦截
     if (hasCheckedIn === "true") {
         console.log(`[得力打卡] 🛡️ 【拦截】班次 [${shiftTag}] 今日已打卡成功，无需重复触发。`);
-        return $.done();
+        return finishTask();
     }
 
     // 设定 10% 的随机触发概率
-    let shouldRun = Math.random() < 0.1;
-    console.log(`[得力打卡] 当前时间 ${hour}:${minute}，随机触发结果: ${shouldRun}`);
+    let isRandomHit = Math.random() < 0.1;
+    let isBackupHit = false;
 
-    // 保底机制：如果一直没抽中，到了时间段末尾强制执行
-    if (hour === 8 && minute >= 54) shouldRun = true;
-    if (hour === 12 && minute >= 11) shouldRun = true;
-    if (hour === 13 && minute >= 54) shouldRun = true;
-    if (hour === 17 && minute >= 41) shouldRun = true;
+    // 保底判定：到指定末尾分钟时强制打卡
+    if ((hour === 8 && minute >= 54) ||
+        (hour === 12 && minute >= 11) ||
+        (hour === 13 && minute >= 54) ||
+        (hour === 17 && minute >= 41)) {
+        isBackupHit = true;
+    }
+
+    let shouldRun = isRandomHit || isBackupHit;
+
+    if (isBackupHit && !isRandomHit) {
+        console.log(`[得力打卡] 当前时间 ${hour}:${minute}，随机触发结果: false (🛡️ 触发末尾保底机制强制打卡)`);
+    } else {
+        console.log(`[得力打卡] 当前时间 ${hour}:${minute}，随机触发结果: ${shouldRun}`);
+    }
 
     if (!shouldRun) {
         console.log(`[得力打卡] 🎲 随机未命中，等待下一轮询...`);
-        return $.done(); // 静默结束，等待下一分钟
+        return finishTask();
     }
 
     // ==========================================

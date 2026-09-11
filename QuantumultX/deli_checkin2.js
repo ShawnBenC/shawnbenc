@@ -1,13 +1,16 @@
 // ==UserScript==
-// @ScriptName        得力e+ 自动打卡 2.4（全自动化）
-// @Author            乌蝇哥™
-// @UpdateTime        2026-09-03
+// @ScriptName        得力e+ 自动打卡 2.5（全自动化）
+// @Author            乌蝇哥™ ( by ShawnC)
+// @UpdateTime        2026-09-11
+// @FixNote           v2.5 修复两处核心Bug:
+//                    [Fix1] 手动运行时绕过随机触发概率 
+//                    [Fix2] 防重打卡标记改为「按账号user_id隔离」
 // ==/UserScript==
 
 /*
 [rewrite_local]
 # 添加重写抓取打卡身份参数及定位信息 (必须使用 body 模式)
-^https?:\/\/kq\.delicloud\.com\/attend\/.* url script-request-body https://raw.githubusercontent.com/ShawnBenC/shawnbenc/refs/heads/main/QuantumultX/deli_checkin2.js
+^https?:\/\/kq\.delicloud\.com\/attend\/.* url script-request-body https://raw.githubusercontent.com/ShawnBenC/shawnbenc/refs/heads/main/QuantumultX/deli_checkin3.js
 
 [task_local]
 # 早上、下午 (8点,13点的 45-55分 每分钟轮询)
@@ -152,36 +155,59 @@ function doCheckin() {
     else if (hour >= 17 && hour <= 19) shiftTag = "evening";
     else shiftTag = `hour_${hour}`;
 
-    const flagKey = `Deli_Checkin_${dateStr}_${shiftTag}`;
+    // =====================================================================
+    //    防重打卡标记「按账号隔离」
+    //    采用 Key: Deli_Checkin_账号user_id_日期_班次
+    //    每个 user_id 拥有独立标记，账号间完全隔离互不干扰。
+    // =====================================================================
+    const accountId = acc.user_id || acc.uuid || "default";
+    const flagKey = `Deli_Checkin_${accountId}_${dateStr}_${shiftTag}`;
     const hasCheckedIn = $.getdata(flagKey);
 
     console.log(`[得力打卡] 🕒 当前时间: ${hour}:${minute >= 10 ? minute : '0' + minute} | 班次标记: ${flagKey}`);
 
-    // 重复打卡拦截
+    // 重复打卡拦截（按账号隔离判断）
     if (hasCheckedIn === "true") {
-        console.log(`[得力打卡] 🛡️ 【拦截】班次 [${shiftTag}] 今日已打卡成功，无需重复触发。`);
+        console.log(`[得力打卡] 🛡️ 【拦截】账号 [${accountId}] 班次 [${shiftTag}] 今日已打卡成功，无需重复触发。`);
         return finishTask();
     }
 
-    // 设定 10% 的随机触发概率
-    let isRandomHit = Math.random() < 0.1;
+    // =====================================================================
+    // 手动运行跳过随机概率，直强制打卡
+    // =====================================================================
+    const isInScheduledWindow =
+        (hour === 8  && minute >= 45 && minute <= 55) ||
+        (hour === 13 && minute >= 45 && minute <= 55) ||
+        (hour === 12 && minute >= 1  && minute <= 11) ||
+        (hour === 17 && minute >= 31 && minute <= 41);
+
+    const isManualRun = !isInScheduledWindow;
+
+    let isRandomHit = false;
     let isBackupHit = false;
 
-    // 保底判定：到指定末尾分钟时强制打卡
-    if ((hour === 8 && minute >= 54) ||
-        (hour === 12 && minute >= 11) ||
-        (hour === 13 && minute >= 54) ||
-        (hour === 17 && minute >= 41)) {
-        isBackupHit = true;
-    }
-
-    let shouldRun = isRandomHit || isBackupHit;
-
-    if (isBackupHit && !isRandomHit) {
-        console.log(`[得力打卡] 当前时间 ${hour}:${minute}，随机触发结果: false (🛡️ 触发末尾保底机制强制打卡)`);
+    if (isManualRun) {
+        console.log(`[得力打卡] 🖐️ 检测到手动运行，跳过随机概率，强制打卡。`);
     } else {
-        console.log(`[得力打卡] 当前时间 ${hour}:${minute}，随机触发结果: ${shouldRun}`);
+        // 定时运行：执行随机 10% 概率触发
+        isRandomHit = Math.random() < 0.1;
+
+        // 保底判定：到末尾分钟时强制打卡
+        if ((hour === 8 && minute >= 54) ||
+            (hour === 12 && minute >= 11) ||
+            (hour === 13 && minute >= 54) ||
+            (hour === 17 && minute >= 41)) {
+            isBackupHit = true;
+        }
+
+        if (isBackupHit && !isRandomHit) {
+            console.log(`[得力打卡] 当前时间 ${hour}:${minute}，随机触发结果: false (🛡️ 触发末尾保底机制强制打卡)`);
+        } else {
+            console.log(`[得力打卡] 当前时间 ${hour}:${minute}，随机触发结果: ${isRandomHit || isBackupHit}`);
+        }
     }
+
+    let shouldRun = isManualRun || isRandomHit || isBackupHit;
 
     if (!shouldRun) {
         console.log(`[得力打卡] 🎲 随机未命中，等待下一轮询...`);
@@ -192,8 +218,13 @@ function doCheckin() {
     // 🛡️ 触发成功，开始发送真实请求
     // ==========================================
     
-    const randomDelaySec = Math.floor(Math.random() * 30) + 5; // 🎲 核心优化：增加 5~35 秒随机延迟
-    console.log(`[得力打卡] 🎯 命中打卡！随机延迟 ${randomDelaySec} 秒后发送真实请求...`);
+    // 手动运行时缩短延迟至 1~5 秒
+    // 定时运行时保持 5~35 秒随机延迟
+    const randomDelaySec = isManualRun
+        ? Math.floor(Math.random() * 5) + 1
+        : Math.floor(Math.random() * 30) + 5;
+    const runMode = isManualRun ? "手动运行" : "定时运行";
+    console.log(`[得力打卡] 🎯 命中打卡！[${runMode}] 账号: ${accountId}，随机延迟 ${randomDelaySec} 秒后发送真实请求...`);
 
     setTimeout(() => {
         const executeTime = new Date();

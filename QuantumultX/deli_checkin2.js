@@ -10,7 +10,7 @@
 /*
 [rewrite_local]
 # 添加重写抓取打卡身份参数及定位信息 (必须使用 body 模式)
-^https?:\/\/kq\.delicloud\.com\/attend\/.* url script-request-body https://raw.githubusercontent.com/ShawnBenC/shawnbenc/refs/heads/main/QuantumultX/deli_checkin3.js
+^https?:\/\/kq\.delicloud\.com\/attend\/.* url script-request-body https://raw.githubusercontent.com/ShawnBenC/shawnbenc/refs/heads/main/QuantumultX/deli_checkin2.js
 
 [task_local]
 # 早上、下午 (8点,13点的 45-55分 每分钟轮询)

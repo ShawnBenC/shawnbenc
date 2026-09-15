@@ -70,10 +70,8 @@
           "id": "Deli.ForceRun",
           "name": "🔑 强制手动模式",
           "val": "false",
-          "type": "selects",
-          "items": ["false", "true"],
-          "placeholder": "默认 false",
-          "desc": "⚠️ 开启前须在 QX 手动停止定时任务！开启后任何触发均无条件打卡（含 Cron）。用完手动关回 false 并重启定时任务恢复自动模式"
+          "type": "boolean",
+          "desc": "⚠️ 开启前须在 QX 手动停止定时任务！开启后任何触发均无条件打卡（含 Cron）。用完手动关回并重启定时任务恢复自动模式"
         }
       ],
       "author": "@乌蝇哥™",

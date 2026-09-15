@@ -1,10 +1,8 @@
 // ==UserScript==
-// @ScriptName        得力e+ 自动打卡 2.5（全自动化）
+// @ScriptName        得力e+ 自动打卡 2.6（全自动化）
 // @Author            乌蝇哥™ ( by ShawnC)
-// @UpdateTime        2026-09-11
-// @FixNote           v2.5 修复两处核心Bug:
-//                    [Fix1] 手动运行时绕过随机触发概率 
-//                    [Fix2] 防重打卡标记改为「按账号user_id隔离」
+// @UpdateTime        2026-09-15
+// @FixNote           v2.6 [Fix]手动运行独立逻辑：跳过防重检查 + 跳过随机概率，无条件打卡
 // ==/UserScript==
 
 /*
@@ -166,14 +164,8 @@ function doCheckin() {
 
     console.log(`[得力打卡] 🕒 当前时间: ${hour}:${minute >= 10 ? minute : '0' + minute} | 班次标记: ${flagKey}`);
 
-    // 重复打卡拦截（按账号隔离判断）
-    if (hasCheckedIn === "true") {
-        console.log(`[得力打卡] 🛡️ 【拦截】账号 [${accountId}] 班次 [${shiftTag}] 今日已打卡成功，无需重复触发。`);
-        return finishTask();
-    }
-
     // =====================================================================
-    // 手动运行跳过随机概率，直强制打卡
+    // 手动运行独立逻辑：跳过防重检查 + 跳过随机概率，无条件打卡
     // =====================================================================
     const isInScheduledWindow =
         (hour === 8  && minute >= 45 && minute <= 55) ||
@@ -183,16 +175,25 @@ function doCheckin() {
 
     const isManualRun = !isInScheduledWindow;
 
-    let isRandomHit = false;
-    let isBackupHit = false;
-
+    // 手动运行：完全跳过防重拦截，直接进入打卡流程
     if (isManualRun) {
-        console.log(`[得力打卡] 🖐️ 检测到手动运行，跳过随机概率，强制打卡。`);
+        if (hasCheckedIn === "true") {
+            console.log(`[得力打卡] 🖐️ 手动运行：检测到账号 [${accountId}] 本班次已有打卡记录，忽略防重，强制执行。`);
+        } else {
+            console.log(`[得力打卡] 🖐️ 手动运行：跳过随机概率和防重检查，强制打卡。`);
+        }
     } else {
-        // 定时运行：执行随机 10% 概率触发
-        isRandomHit = Math.random() < 0.1;
+        // 定时运行：先做防重拦截
+        if (hasCheckedIn === "true") {
+            console.log(`[得力打卡] 🛡️ 【拦截】账号 [${accountId}] 班次 [${shiftTag}] 今日已打卡成功，无需重复触发。`);
+            return finishTask();
+        }
 
-        // 保底判定：到末尾分钟时强制打卡
+        // 定时运行：执行随机 10% 概率触发
+        let isRandomHit = Math.random() < 0.1;
+        let isBackupHit = false;
+
+        // 保底判定：到指定末尾分钟时强制打卡
         if ((hour === 8 && minute >= 54) ||
             (hour === 12 && minute >= 11) ||
             (hour === 13 && minute >= 54) ||
@@ -205,13 +206,11 @@ function doCheckin() {
         } else {
             console.log(`[得力打卡] 当前时间 ${hour}:${minute}，随机触发结果: ${isRandomHit || isBackupHit}`);
         }
-    }
 
-    let shouldRun = isManualRun || isRandomHit || isBackupHit;
-
-    if (!shouldRun) {
-        console.log(`[得力打卡] 🎲 随机未命中，等待下一轮询...`);
-        return finishTask();
+        if (!isRandomHit && !isBackupHit) {
+            console.log(`[得力打卡] 🎲 随机未命中，等待下一轮询...`);
+            return finishTask();
+        }
     }
 
     // ==========================================

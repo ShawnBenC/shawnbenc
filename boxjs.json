@@ -15,7 +15,7 @@
         "Deli.Address",
         "Deli.Name",
         "Deli.DeviceId",
-        "Deli.ForceRun"
+        "@Deli.ForceRun"
       ],
       "settings": [
         {
@@ -67,7 +67,7 @@
           "desc": "⚠️ 请在 App 内真实点击一次打卡，系统会自动抓取填入"
         },
         {
-          "id": "Deli.ForceRun",
+          "id": "@Deli.ForceRun",
           "name": "🔑 强制手动模式",
           "val": false,
           "type": "boolean",

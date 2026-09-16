@@ -1,8 +1,8 @@
 // ==UserScript==
 // @ScriptName        得力e+ 自动打卡 2.7（全自动化）
 // @Author            乌蝇哥™ ( by ShawnC)
-// @UpdateTime        2026-09-15
-// @FixNote           v2.7 [New] BoxJS 增加强制运行开关 Deli.ForceRun
+// @UpdateTime        2026-09-16
+// @FixNote           v2.7 [New] BoxJS 增加强制运行开关 @Deli.ForceRun
 // ==/UserScript==
 
 /*
@@ -135,13 +135,21 @@ function doCheckin() {
     }
 
     // ==========================================
-    // 🔑 BoxJS 强制手动模式（Deli.ForceRun）
+    // 🔑 BoxJS 强制手动模式（@Deli.ForceRun）
     // ==========================================
     // ⚠️ 开启前必须在 QX 里停止该脚本所有定时任务
     // 开启时：任何触发无条件直接打卡（跳过防重/随机/时间窗口）。
     // 关闭后：恢复全自动模式，重新启用定时任务。
-    const forceRunFlag = $.getdata("Deli.ForceRun");
-    const isForceRun = forceRunFlag === true || forceRunFlag === "true";
+    let forceRunRaw = $.getdata("@Deli.ForceRun");
+    if (forceRunRaw === null || forceRunRaw === undefined) {
+        forceRunRaw = $.getdata("Deli.ForceRun");
+    }
+    let isForceRun = false;
+    if (typeof forceRunRaw === "boolean") {
+        isForceRun = forceRunRaw;
+    } else if (typeof forceRunRaw === "string") {
+        try { isForceRun = JSON.parse(forceRunRaw) === true; } catch (e) { isForceRun = (forceRunRaw === "true"); }
+    }
 
     // ==========================================
     // 🛡️ 核心防风控逻辑：时间段轮询与随机触发

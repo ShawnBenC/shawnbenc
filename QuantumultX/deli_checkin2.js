@@ -141,7 +141,7 @@ function doCheckin() {
     // 开启时：任何触发无条件直接打卡（跳过防重/随机/时间窗口）。
     // 关闭后：恢复全自动模式，重新启用定时任务。
     const forceRunFlag = $.getdata("Deli.ForceRun");
-    const isForceRun = String(forceRunFlag) === "true" || forceRunFlag === true;
+    const isForceRun = forceRunFlag === true || forceRunFlag === "true";
 
     // ==========================================
     // 🛡️ 核心防风控逻辑：时间段轮询与随机触发

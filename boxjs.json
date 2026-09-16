@@ -69,12 +69,8 @@
         {
           "id": "Deli.ForceRun",
           "name": "🔑 强制手动模式",
-          "val": "false",
-          "type": "radios",
-          "items": [
-            { "label": "🔴 关闭 (自动模式)", "val": "false" },
-            { "label": "🟢 开启 (强制模式)", "val": "true" }
-          ],
+          "val": false,
+          "type": "boolean",
           "desc": "⚠️ 开启前须在 QX 手动停止定时任务！开启后任何触发均无条件打卡（含 Cron）。用完手动关回并重启定时任务恢复自动模式"
         }
       ],

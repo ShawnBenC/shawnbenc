@@ -1,11 +1,11 @@
 // ==UserScript==
-// @ScriptName        得力e+ 自动打卡 4.0（全自动化 + 独立纯手动控制）
+// @ScriptName        得力e+ 自动打卡 4.1（全自动化 + 独立纯手动控制）
 // @Author            乌蝇哥™ (修复与重构 by ShawnC)
 // @UpdateTime        2026-09-17
-// @FixNote           v4.0 架构级重构：
-//                    1. 明确防重定位：防重标记(Dedup)唯一作用是保护 Cron 轮询不重复打卡。
-//                    2. 独立纯手动模式：@Deli.ForceRun 开关开启时，彻底解耦防重体系，不查防重、不拦防重、打完不锁防重，无视时段与概率，按次必打！
-//                    3. 开关全容错与诊断日志：启动第一行输出开关探测结果，消除排查盲区。
+// @FixNote           v4.1 核心强化：
+//                    1. 深度扫描 BoxJS 内部会话库 (chavy_boxjs_sessions)，彻底解决 standalone key 为 null 问题；
+//                    2. 新增脚本级硬开关 (SCRIPT_FORCE_RUN)，可脱离 BoxJS 网页直接控制；
+//                    3. 模式诊断增加多维度排查提示。
 // ==/UserScript==
 
 /*
@@ -31,6 +31,15 @@ const $ = new Env("得力e+打卡");
 
 // 对应 BoxJS 里的 Keys
 const KEY_ACCOUNT = "Deli.Account";
+
+// =========================================================================
+// 🔑 脚本级强制手动模式硬开关（双保险方案）
+// -------------------------------------------------------------------------
+// 如果不想依赖 BoxJS 网页保存，可直接将此处修改为 true：
+//   true  = 强制纯手动模式（无视时段、无视防重、直接打卡、打完不锁防重）
+//   false = 正常模式（由 BoxJS 开关及时间窗口共同决定）
+// =========================================================================
+const SCRIPT_FORCE_RUN = false;
 
 if (typeof $request !== "undefined") {
     // ======== 抓包重写逻辑 (触发条件：打开App进入考勤页) ========
@@ -140,32 +149,57 @@ function doCheckin() {
     const accountId = acc.user_id || acc.uuid || "default";
 
     // =========================================================================
-    // 🔑 第一步：检测 BoxJS 强制手动模式（@Deli.ForceRun）
-    // 兼容所有可能的键名别名与存储类型 (boolean, string, number 等)
+    // 🔑 第一步：检测强制手动模式（代码级硬开关 + BoxJS 独立键 + BoxJS 会话库）
     // =========================================================================
-    const forceRunKeys = ["@Deli.ForceRun", "Deli.ForceRun", "@DeliCheckin.ForceRun", "DeliCheckin.ForceRun"];
+    let isForceRun = false;
+    let matchedSource = "无";
     let forceRunRaw = null;
-    let matchedKey = "无";
-    for (const k of forceRunKeys) {
-        const v = $.getdata(k);
-        if (v !== null && v !== undefined && v !== "") {
-            forceRunRaw = v;
-            matchedKey = k;
-            break;
+
+    // 1. 最高优先级：脚本级硬开关 SCRIPT_FORCE_RUN
+    if (SCRIPT_FORCE_RUN === true) {
+        isForceRun = true;
+        matchedSource = "脚本代码硬开关(SCRIPT_FORCE_RUN)";
+        forceRunRaw = true;
+    }
+
+    // 2. 第二优先级：检测 BoxJS 独立存储键
+    if (!isForceRun) {
+        const forceRunKeys = ["@Deli.ForceRun", "Deli.ForceRun", "@DeliCheckin.ForceRun", "DeliCheckin.ForceRun"];
+        for (const k of forceRunKeys) {
+            const v = $.getdata(k);
+            if (v !== null && v !== undefined && v !== "") {
+                forceRunRaw = v;
+                matchedSource = `BoxJS键名[${k}]`;
+                break;
+            }
+        }
+        if (forceRunRaw !== null) {
+            if (forceRunRaw === true || forceRunRaw === 1) {
+                isForceRun = true;
+            } else if (typeof forceRunRaw === "string") {
+                const s = forceRunRaw.trim().toLowerCase();
+                isForceRun = (s === "true" || s === "1" || s === "yes" || s === "on");
+            }
         }
     }
 
-    // 宽容解析：兼容 true, "true", 1, "1", "yes", "on"
-    let isForceRun = false;
-    if (forceRunRaw === true || forceRunRaw === 1) {
-        isForceRun = true;
-    } else if (typeof forceRunRaw === "string") {
-        const s = forceRunRaw.trim().toLowerCase();
-        isForceRun = (s === "true" || s === "1" || s === "yes" || s === "on");
+    // 3. 第三优先级：深度检索 BoxJS 内部会话数据库 (chavy_boxjs_sessions)
+    if (!isForceRun) {
+        const sessionVal = findInBoxSessions("@Deli.ForceRun") || findInBoxSessions("Deli.ForceRun");
+        if (sessionVal !== null && sessionVal !== undefined) {
+            forceRunRaw = sessionVal;
+            matchedSource = "BoxJS内部会话库(chavy_boxjs_sessions)";
+            if (sessionVal === true || sessionVal === 1) {
+                isForceRun = true;
+            } else if (typeof sessionVal === "string") {
+                const s = sessionVal.trim().toLowerCase();
+                isForceRun = (s === "true" || s === "1" || s === "yes" || s === "on");
+            }
+        }
     }
 
-    // 第一行直接打印诊断日志，让排查一目了然
-    console.log(`[得力打卡] 🔍 模式诊断: 强制开关=[${isForceRun ? '已开启(ON)' : '已关闭(OFF)'}] (匹配键名: ${matchedKey}, 原始值: ${JSON.stringify(forceRunRaw)})`);
+    // 打印精准诊断日志
+    console.log(`[得力打卡] 🔍 模式诊断: 强制开关=[${isForceRun ? '已开启(ON)' : '已关闭(OFF)'}] (匹配来源: ${matchedSource}, 原始值: ${JSON.stringify(forceRunRaw)})`);
 
     // =========================================================================
     // 🚀 分支 A：【强制手动模式】（isForceRun === true）
@@ -329,6 +363,26 @@ function executeRequest(acc, lng, lat, address, name, deviceId, accountId, delay
             finishTask();
         });
     }, delaySec * 1000);
+}
+
+// 辅助函数：从 BoxJS 内部会话数据库中检索键值
+function findInBoxSessions(targetKey) {
+    try {
+        const sessionsStr = $.getdata("chavy_boxjs_sessions");
+        if (!sessionsStr) return null;
+        const sessions = typeof sessionsStr === "string" ? JSON.parse(sessionsStr) : sessionsStr;
+        if (Array.isArray(sessions)) {
+            for (const s of sessions) {
+                if (s && s.datas && Array.isArray(s.datas)) {
+                    const item = s.datas.find((d) => d && d.key === targetKey);
+                    if (item && item.val !== null && item.val !== undefined && item.val !== "") {
+                        return item.val;
+                    }
+                }
+            }
+        }
+    } catch (e) {}
+    return null;
 }
 
 // 统一退出函数

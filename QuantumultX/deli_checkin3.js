@@ -17,10 +17,12 @@ const $ = new Env("得力e+手动打卡");
 // 共享读取 BoxJS 账号凭证与定位数据
 const KEY_ACCOUNT = "Deli.Account";
 
-!(async () => {
+if (typeof $request !== "undefined") {
+    $.done({});
+} else {
     console.log("================== 得力手动打卡任务 ==================");
     doManualCheckin();
-})();
+}
 
 function doManualCheckin() {
     const accountStr = $.getdata(KEY_ACCOUNT);
@@ -78,16 +80,16 @@ function doManualCheckin() {
         $.post(request, (error, response, data) => {
             if (error) {
                 console.log(`[得力手动打卡] ❌ 网络请求失败: ${error}`);
-                $.msg($.name, "❌ 手动打卡失败", `网络请求错误: ${error}`);
+                $.msg($.name, "❌ 打卡失败", `网络请求错误: ${error}`);
             } else {
                 try {
                     const res = JSON.parse(data);
                     if (res.errno === 0 || res.errmsg === "ok") {
-                        console.log(`[得力手动打卡] 🎉 手动打卡成功！响应: ${data}`);
+                        console.log(`[得力手动打卡] 🎉 打卡成功！响应: ${data}`);
                         console.log(`[得力手动打卡] 🔑 手动模式：不写入防重标记，保持自动定时环境纯净。`);
 
                         const timeStr = `${executeTime.getHours()}:${String(executeTime.getMinutes()).padStart(2, '0')}:${String(executeTime.getSeconds()).padStart(2, '0')}`;
-                        $.msg($.name, "🎉 手动打卡成功", `打卡时间: ${timeStr}\n打卡地点: ${address}`);
+                        $.msg($.name, "🎉 打卡成功", `打卡时间: ${timeStr}\n打卡地点: ${address}`);
                     } else {
                         const errMsg = res.errmsg || "未知错误";
                         console.log(`[得力手动打卡] ⚠️ 服务端提示: ${errMsg} (errno: ${res.errno})`);

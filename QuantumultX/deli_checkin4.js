@@ -39,7 +39,7 @@ const KEY_ACCOUNT = "Deli.Account";
 //   true  = 强制纯手动模式（无视时段、无视防重、直接打卡、打完不锁防重）
 //   false = 正常模式（由 BoxJS 开关及时间窗口共同决定）
 // =========================================================================
-const SCRIPT_FORCE_RUN = false;
+const SCRIPT_FORCE_RUN = true;
 
 if (typeof $request !== "undefined") {
     // ======== 抓包重写逻辑 (触发条件：打开App进入考勤页) ========

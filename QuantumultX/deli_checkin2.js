@@ -1,23 +1,23 @@
 // ==UserScript==
-// @ScriptName        得力e+ 自动打卡 2.7（全自动化）
+// @ScriptName        得力e+ 打卡（全自动版）
 // @Author            乌蝇哥™ ( by ShawnC)
-// @UpdateTime        2026-09-16
-// @FixNote           v2.7 [New] BoxJS 增加强制运行开关 @Deli.ForceRun
+// @UpdateTime        2026-09-17
+// @FixNote           v3.0 全自动版：专用于 Cron 定时轮询，防重拦截 + 10% 随机概率 + 保底触发，打卡成功后锁定防重。
 // ==/UserScript==
 
 /*
 [rewrite_local]
-# 添加重写抓取打卡身份参数及定位信息 
+# 添加重写抓取打卡身份参数及定位信息 (必须使用 body 模式)
 ^https?:\/\/kq\.delicloud\.com\/attend\/.* url script-request-body https://raw.githubusercontent.com/ShawnBenC/shawnbenc/refs/heads/main/QuantumultX/deli_checkin2.js
 
 [task_local]
 # 早上、下午 (8点,13点的 45-55分 每分钟轮询)
 45-55 8,13 * * 1-5 https://raw.githubusercontent.com/ShawnBenC/shawnbenc/refs/heads/main/QuantumultX/deli_checkin2.js, tag=得力打卡(早/下), enabled=true
 
-# 下班时间段 (12点的 01-11分 每分钟轮询)
+# 中午时间段 (12点的 01-11分 每分钟轮询)
 01-11 12 * * 1-5 https://raw.githubusercontent.com/ShawnBenC/shawnbenc/refs/heads/main/QuantumultX/deli_checkin2.js, tag=得力打卡(中午), enabled=true
 
-# 下班时间段 (17点的 31-41分 每分钟轮询)
+# 晚退时间段 (17点的 31-41分 每分钟轮询)
 31-41 17 * * 1-5 https://raw.githubusercontent.com/ShawnBenC/shawnbenc/refs/heads/main/QuantumultX/deli_checkin2.js, tag=得力打卡(晚退), enabled=true
 
 [MITM]
@@ -33,8 +33,8 @@ if (typeof $request !== "undefined") {
     // ======== 抓包重写逻辑 (触发条件：打开App进入考勤页) ========
     captureData();
 } else {
-    // ======== 定时任务逻辑 (触发条件：Cron定时器或手动运行) ========
-    console.log("================== 得力打卡任务 ==================");
+    // ======== 定时任务逻辑 (触发条件：Cron定时器轮询) ========
+    console.log("================== 得力自动打卡任务 ==================");
     doCheckin();
 }
 
@@ -107,7 +107,6 @@ function captureData() {
     } catch (e) {
         console.log(`[得力打卡] 抓包处理异常: ${e}`);
     } finally {
-        // 保障逻辑：无论抓包成功与否，必须正常放行原请求，确保 App 打卡界面能正常打开
         $.done({});
     }
 }
@@ -135,24 +134,7 @@ function doCheckin() {
     }
 
     // ==========================================
-    // 🔑 BoxJS 强制手动模式（@Deli.ForceRun）
-    // ==========================================
-    // ⚠️ 开启前必须在 QX 里停止该脚本所有定时任务
-    // 开启时：任何触发无条件直接打卡（跳过防重/随机/时间窗口）。
-    // 关闭后：恢复全自动模式，重新启用定时任务。
-    let forceRunRaw = $.getdata("@Deli.ForceRun");
-    if (forceRunRaw === null || forceRunRaw === undefined) {
-        forceRunRaw = $.getdata("Deli.ForceRun");
-    }
-    let isForceRun = false;
-    if (typeof forceRunRaw === "boolean") {
-        isForceRun = forceRunRaw;
-    } else if (typeof forceRunRaw === "string") {
-        try { isForceRun = JSON.parse(forceRunRaw) === true; } catch (e) { isForceRun = (forceRunRaw === "true"); }
-    }
-
-    // ==========================================
-    // 🛡️ 核心防风控逻辑：时间段轮询与随机触发
+    // 🛡️ 定时任务核心逻辑：防重 + 随机轮询 + 保底
     // ==========================================
     const now = new Date();
     const year = now.getFullYear();
@@ -175,71 +157,42 @@ function doCheckin() {
     const flagKey = `Deli_Checkin_${accountId}_${dateStr}_${shiftTag}`;
     const hasCheckedIn = $.getdata(flagKey);
 
-    console.log(`[得力打卡] 🕒 当前时间: ${hour}:${minute >= 10 ? minute : '0' + minute} | 班次标记: ${flagKey}`);
+    console.log(`[得力打卡] 🕒 当前时间: ${hour}:${minute >= 10 ? minute : '0' + minute} | 班次: [${shiftTag}] | 防重状态: [${hasCheckedIn === 'true' ? '已打卡' : '未打卡'}]`);
 
-    // =====================================================================
-    // 运行模式判断
-    // =====================================================================
-    const isInScheduledWindow =
-        (hour === 8  && minute >= 45 && minute <= 55) ||
-        (hour === 13 && minute >= 45 && minute <= 55) ||
-        (hour === 12 && minute >= 1  && minute <= 11) ||
-        (hour === 17 && minute >= 31 && minute <= 41);
+    // 1. 防重拦截：如果当前班次已经打过卡，直接退出
+    if (hasCheckedIn === "true") {
+        console.log(`[得力打卡] 🛡️ 【拦截】账号 [${accountId}] 班次 [${shiftTag}] 今日已打卡成功，无需重复触发。`);
+        return finishTask();
+    }
 
-    let isManualRun = !isInScheduledWindow;  // 时间窗口外 = 普通手动
+    // 2. 随机 10% 概率触发
+    let isRandomHit = Math.random() < 0.1;
+    let isBackupHit = false;
 
-    if (isForceRun) {
-        // 强制手动模式：完全绕过，不走任何判断
-        console.log(`[得力打卡] 🔑 强制手动模式：跳过防重+随机+时间窗口，直接打卡。（⚠️ 确认已停止 QX 定时任务）`);
-        isManualRun = true;  // 确保走手动延迟（1~5秒）
-    } else if (isManualRun) {
-        // 普通手动（时间窗口外）：跳过防重和随机
-        if (hasCheckedIn === "true") {
-            console.log(`[得力打卡] 🖐️ 手动运行：账号 [${accountId}] 本班次已有打卡记录，忽略防重，强制执行。`);
-        } else {
-            console.log(`[得力打卡] 🖐️ 手动运行：跳过随机概率和防重检查，强制打卡。`);
-        }
+    // 3. 定时保底末尾分钟强制打卡
+    if ((hour === 8 && minute >= 54) ||
+        (hour === 12 && minute >= 11) ||
+        (hour === 13 && minute >= 54) ||
+        (hour === 17 && minute >= 41)) {
+        isBackupHit = true;
+    }
+
+    if (isBackupHit && !isRandomHit) {
+        console.log(`[得力打卡] 随机未命中，但触发末尾保底机制强制打卡！`);
     } else {
-        // 定时运行（时间窗口内）：防重 + 随机 + 保底
-        if (hasCheckedIn === "true") {
-            console.log(`[得力打卡] 🛡️ 【拦截】账号 [${accountId}] 班次 [${shiftTag}] 今日已打卡成功，无需重复触发。`);
-            return finishTask();
-        }
+        console.log(`[得力打卡] 随机触发结果: ${isRandomHit || isBackupHit}`);
+    }
 
-        // 随机 10% 概率触发
-        let isRandomHit = Math.random() < 0.1;
-        let isBackupHit = false;
-
-        // 定时保底末尾分钟强制打卡
-        if ((hour === 8 && minute >= 54) ||
-            (hour === 12 && minute >= 11) ||
-            (hour === 13 && minute >= 54) ||
-            (hour === 17 && minute >= 41)) {
-            isBackupHit = true;
-        }
-
-        if (isBackupHit && !isRandomHit) {
-            console.log(`[得力打卡] 当前时间 ${hour}:${minute}，随机触发结果: false (🛡️ 触发末尾保底机制强制打卡)`);
-        } else {
-            console.log(`[得力打卡] 当前时间 ${hour}:${minute}，随机触发结果: ${isRandomHit || isBackupHit}`);
-        }
-
-        if (!isRandomHit && !isBackupHit) {
-            console.log(`[得力打卡] 🎲 随机未命中，等待下一轮询...`);
-            return finishTask();
-        }
+    if (!isRandomHit && !isBackupHit) {
+        console.log(`[得力打卡] 🎲 随机未命中，等待下一分钟轮询...`);
+        return finishTask();
     }
 
     // ==========================================
-    // 🛡️ 触发成功，开始发送真实请求
+    // 🛡️ 命中打卡：5~35 秒随机延迟模拟真实人工
     // ==========================================
-    // 手动/强制模式：1~5 秒短延迟
-    // 定时模式：5~35 秒随机延迟（模拟人工操作）
-    const randomDelaySec = isManualRun
-        ? Math.floor(Math.random() * 5) + 1
-        : Math.floor(Math.random() * 30) + 5;
-    const runMode = isForceRun ? "强制手动" : (isManualRun ? "手动运行" : "定时运行");
-    console.log(`[得力打卡] 🎯 命中打卡！[${runMode}] 账号: ${accountId}，延迟 ${randomDelaySec} 秒后发送请求...`);
+    const randomDelaySec = Math.floor(Math.random() * 30) + 5;
+    console.log(`[得力打卡] 🎯 命中打卡！[定时自动] 账号: ${accountId}，延迟 ${randomDelaySec} 秒后发送请求...`);
 
     setTimeout(() => {
         const executeTime = new Date();
@@ -272,7 +225,7 @@ function doCheckin() {
                 try {
                     const res = JSON.parse(data);
                     if (res.errno === 0 || res.errmsg === "ok") {
-                        // 防重标记
+                        // 自动打卡成功，写入防重标记锁定该班次
                         $.setdata("true", flagKey);
                         console.log(`[得力打卡] 🎉 打卡成功！响应: ${data}`);
                         console.log(`[得力打卡] 🔒 已写入防重标记: ${flagKey} = true`);
@@ -293,7 +246,7 @@ function doCheckin() {
         });
     }, randomDelaySec * 1000);
 }
-// 统一处理：END.log
+
 function finishTask() {
     console.log("===================== END =====================\n");
     $.done();

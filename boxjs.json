@@ -14,8 +14,7 @@
         "Deli.Lat",
         "Deli.Address",
         "Deli.Name",
-        "Deli.DeviceId",
-        "@Deli.ForceRun"
+        "Deli.DeviceId"
       ],
       "settings": [
         {
@@ -65,13 +64,6 @@
           "type": "text",
           "placeholder": "默认 800026",
           "desc": "⚠️ 请在 App 内真实点击一次打卡，系统会自动抓取填入"
-        },
-        {
-          "id": "@Deli.ForceRun",
-          "name": "🔑 强制手动模式",
-          "val": false,
-          "type": "boolean",
-          "desc": "⚠️ 开启前须在 QX 手动停止定时任务！开启后任何触发均无条件打卡（含 Cron）。用完手动关回并重启定时任务恢复自动模式"
         }
       ],
       "author": "@乌蝇哥™",
